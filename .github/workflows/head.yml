@@ -1,0 +1,52 @@
+# brew test-bot never passes --HEAD to brew install, which refuses a HEAD-only
+# formula without it, so tests.yml cannot build the gpt formula. This workflow
+# does, and its schedule notices a gpt master that no longer installs.
+name: brew install --HEAD
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - Formula/**
+      - .github/workflows/head.yml
+  pull_request:
+  schedule:
+    # Every day at 06:40 UTC
+    - cron: 40 6 * * *
+  workflow_dispatch:
+
+permissions: {}
+
+defaults:
+  run:
+    shell: bash -xeuo pipefail {0}
+
+jobs:
+  install-head:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ macos-26 ]
+        include:
+          - os: ubuntu-latest
+            container:
+              image: ghcr.io/homebrew/brew:main
+    runs-on: ${{ matrix.os }}
+    container: ${{ fromJSON(toJSON(matrix.container)) }} # zizmor: ignore[unpinned-images]
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - name: Set up Homebrew
+        uses: Homebrew/actions/setup-homebrew@63a2d4d8d4193eab3e62b1b782ff3ab8408f5b29 # 2026.11.09.1
+
+      - run: brew install --HEAD gportugol/gpt/gpt
+
+      - run: brew test gportugol/gpt/gpt
+
+      - name: Run an installed example through the linked prefix
+        run: |
+          prefix=$(brew --prefix)
+          "$prefix/bin/gpt" -i "$prefix/share/doc/gpt/examples/olamundo.gpt" |
+            grep -Fx "Olá Mundo!"
